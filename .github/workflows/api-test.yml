@@ -36,11 +36,6 @@ jobs:
       API_BASE_URL: "https://reqres.in"
       REQUEST_TIMEOUT: "10"
       SSL_VERIFY: "False"
-    # Set secrets (sensitive config - configure in GitHub repo Settings > Secrets and variables > Actions)
-    secrets:
-      API_TEST_USERNAME: ${{ secrets.API_TEST_USERNAME }}
-      API_TEST_PASSWORD: ${{ secrets.API_TEST_PASSWORD }}
-      API_FIXED_TOKEN: ${{ secrets.API_FIXED_TOKEN }}
 
     # Execution steps (ordered by dependency)
     steps:
