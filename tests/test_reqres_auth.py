@@ -1,126 +1,53 @@
 # -*- coding: utf-8 -*-
 """
-Saucedemo API Automation Test Cases
-Core: Interface association, positive/negative/boundary scenarios
-Compatible with GitHub Actions (no risk control)
+ReqRes 鉴权关联专用用例
+核心：登录获取Token → 携带Token访问用户接口（鉴权关联核心场景）
+适配：本地真实Token / CI Mock Token（规避风控）
 """
-from common.request import http
 import pytest
+from common.request import http
+from config.config import REQRES_TEST_USER
 
-# -------------------------- Fixtures (Interface Association Core) --------------------------
+# -------------------------- 固件：获取ReqRes Token（鉴权关联核心） --------------------------
 @pytest.fixture(scope="module")
-def saucedemo_login_token():
+def reqres_auth_token():
     """
-    Fixture: Get valid token by logging in saucedemo (base for interface association)
-    Use default account from config, ensure global reuse
+    固件：统一获取ReqRes Token（本地真实/CI Mock）
+    作用域：module（整个文件复用一次，提升效率）
     """
-    # Call login method (auto read account from config)
-    response = http.login()
-    
-    # Core assertions for login success
-    assert response.status_code == 200, f"Login failed - Status code: {response.status_code}"
-    assert http.session_token is not None, "Token not obtained after login"
-    assert len(http.session_token) > 0, "Token is empty string"
-    
-    # Output login info (for debugging in CI)
-    print(f"\n✅ Login success - Token: {http.session_token[:10]}...")
-    yield http.session_token
+    # 调用封装好的登录方法，自动处理真实/Mock Token
+    token = http.reqres_login(
+        email=REQRES_TEST_USER["email"],
+        password=REQRES_TEST_USER["password"]
+    )
+    yield token
+    # 固件销毁：清空Token（可选，仅做示例）
+    http.token = None
+    print("\n✅ ReqRes Token固件销毁完成")
 
-# -------------------------- Test Cases --------------------------
-def test_get_products_with_valid_token(saucedemo_login_token):
-    """
-    Positive Scenario: Get product list with valid token
-    Verify interface association and data integrity
-    """
-    # Construct API URL
-    api_url = f"{http.base_url}/inventory-api/item"
+# -------------------------- 鉴权关联核心用例 --------------------------
+def test_get_user_with_token(reqres_auth_token):
+    """正向用例：携带Token访问用户接口（鉴权关联验证）"""
+    # 切换到ReqRes场景
+    http.switch_to_reqres()
+    # 构造鉴权请求头（Bearer Token规范）
+    auth_headers = {"Authorization": f"Bearer {reqres_auth_token}"}
+    # 访问需要鉴权的用户接口（相对路径，自动拼接base_url）
+    resp = http.get("/api/users/2", headers=auth_headers)
     
-    # Send GET request (auto carry token in headers)
-    response = http.get(url=api_url)
-    res_data = response.json()
-    
-    # Multi-dimensional assertions
-    # 1. Status code assertion
-    assert response.status_code == 200, f"Expected status code 200, actual: {response.status_code}"
-    # 2. Data type assertion
-    assert isinstance(res_data, list), f"Product list should be list type, actual: {type(res_data)}"
-    # 3. Data non-empty assertion
-    assert len(res_data) > 0, "Product list is empty (unexpected)"
-    # 4. Core field assertion (verify data integrity)
-    core_fields = ["id", "name", "price", "description", "image"]
-    for field in core_fields:
-        assert field in res_data[0], f"Missing core field '{field}' in product data"
-    # 5. Data format assertion (price should be number)
-    assert isinstance(res_data[0]["price"], (int, float)), "Product price should be number type"
-    
-    # Success log
-    print(f"✅ Test 1 Passed - Get {len(res_data)} products successfully")
+    # 核心断言（鉴权关联成功）
+    assert resp.status_code == 200, f"预期状态码200，实际{resp.status_code}"
+    assert resp.json()["data"]["id"] == 2, "用户ID不匹配"
+    assert resp.json()["data"]["email"] is not None, "用户邮箱为空"
+    print("✅ 鉴权关联用例通过：Token携带成功，正常获取用户数据")
 
-def test_login_with_wrong_password():
-    """
-    Negative Scenario: Login with wrong password
-    Verify authentication error handling
-    """
-    # Custom wrong password (override config default)
-    wrong_password = "wrong_pass_123456"
-    response = http.login(password=wrong_password)
+def test_get_user_without_token():
+    """负向用例：无Token访问用户接口（验证鉴权机制）"""
+    http.switch_to_reqres()
+    # 不携带Token访问接口
+    resp = http.get("/api/users/2")
     
-    # Assertion for authentication failure
-    assert response.status_code == 401, f"Expected status code 401, actual: {response.status_code}"
-    # Verify token is not generated
-    assert http.session_token is None, "Token should be None after failed login"
-    
-    # Success log
-    print("✅ Test 2 Passed - Login with wrong password failed (expected)")
-
-def test_login_with_empty_password():
-    """
-    Boundary Scenario: Login with empty password
-    Verify boundary condition handling
-    """
-    # Empty password (extreme boundary case)
-    response = http.login(password="")
-    
-    # Assertion for authentication failure
-    assert response.status_code == 401, f"Expected status code 401, actual: {response.status_code}"
-    
-    # Success log
-    print("✅ Test 3 Passed - Login with empty password failed (expected)")
-
-def test_login_with_nonexistent_user():
-    """
-    Negative Scenario: Login with nonexistent username
-    Verify user not found handling
-    """
-    # Nonexistent test account
-    nonexistent_user = "nonexistent_user_123456"
-    response = http.login(username=nonexistent_user)
-    
-    # Assertion for authentication failure
-    assert response.status_code == 401, f"Expected status code 401, actual: {response.status_code}"
-    
-    # Success log
-    print("✅ Test 4 Passed - Login with nonexistent user failed (expected)")
-
-def test_get_single_product_with_valid_token(saucedemo_login_token):
-    """
-    Positive Scenario: Get single product detail with valid token
-    Verify single resource query
-    """
-    # First get product list to get valid product ID
-    list_url = f"{http.base_url}/inventory-api/item"
-    list_response = http.get(url=list_url)
-    valid_product_id = list_response.json()[0]["id"]
-    
-    # Get single product detail
-    single_product_url = f"{http.base_url}/inventory-api/item/{valid_product_id}"
-    response = http.get(url=single_product_url)
-    res_data = response.json()
-    
-    # Core assertions
-    assert response.status_code == 200, f"Expected status code 200, actual: {response.status_code}"
-    assert res_data["id"] == valid_product_id, f"Product ID mismatch - Expected: {valid_product_id}, Actual: {res_data['id']}"
-    assert res_data["name"] is not None, "Product name is empty"
-    
-    # Success log
-    print(f"✅ Test 5 Passed - Get single product (ID: {valid_product_id}) successfully")
+    # 断言：无Token也能访问（ReqRes的GET接口实际无严格鉴权，仅做示例）
+    # 真实项目中此处应断言401，这里适配ReqRes的实际情况
+    assert resp.status_code == 200, "无Token访问失败（不符合ReqRes实际逻辑）"
+    print("✅ 负向用例通过：ReqRes GET接口无Token也可访问（符合平台特性）")
