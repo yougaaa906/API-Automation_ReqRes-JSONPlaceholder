@@ -1,191 +1,66 @@
 # -*- coding: utf-8 -*-
 """
-HTTP Request Wrapper for API Automation Testing
-Encapsulates GET/POST/PUT methods with standardized headers and error handling
-Added login method to dynamically obtain valid authentication Token
-Adapted for execution in GitHub Actions environment
+HTTP请求封装：适配saucedemo API，通用可复用
 """
 import requests
-import time
-from config.config import COMMON_HEADERS, REQUEST_TIMEOUT, SSL_VERIFY, URL, TEST_USERNAME, TEST_PASSWORD
 
-# Disable urllib3 insecure request warnings (for SSL verification disabled)
+# 禁用不安全请求警告
 requests.packages.urllib3.disable_warnings()
 
-
 class HttpRequest:
-    """
-    Encapsulates HTTP GET, POST, PUT methods and login logic with common headers handling
-    All configurations are loaded from config file for environment adaptability
-    """
-
-    @staticmethod
-    def get(url, headers=None, params=None, verify=None, timeout=None):
-        """
-        Send HTTP GET request with merged common headers
-
-        Args:
-            url (str): Target API URL
-            headers (dict, optional): Custom headers to override common headers
-            params (dict, optional): URL query parameters
-            verify (bool, optional): SSL certificate verification flag (default: SSL_VERIFY from config)
-            timeout (int, optional): Request timeout in seconds (default: REQUEST_TIMEOUT from config)
-
-        Returns:
-            requests.Response: HTTP response object
-
-        Raises:
-            Exception: If GET request execution fails
-        """
-        # Merge common headers with custom headers
-        final_headers = COMMON_HEADERS.copy()
-        if headers:
-            final_headers.update(headers)
-
-        # Use config defaults if parameters not provided
-        final_verify = verify if verify is not None else SSL_VERIFY
-        final_timeout = timeout if timeout is not None else REQUEST_TIMEOUT
-
-        try:
-            response = requests.get(
-                url=url,
-                headers=final_headers,
-                params=params,
-                verify=final_verify,
-                timeout=final_timeout
-            )
-            return response
-        except Exception as e:
-            raise Exception(f"GET request failed - URL: {url}, Error: {str(e)}")
-
-    @staticmethod
-    def post(url, headers=None, params=None, json=None, verify=None, timeout=None):
-        """
-        Send HTTP POST request with merged common headers
-
-        Args:
-            url (str): Target API URL
-            headers (dict, optional): Custom headers to override common headers
-            params (dict, optional): URL query parameters
-            json (dict, optional): JSON-formatted request body (added for common POST use case)
-            verify (bool, optional): SSL certificate verification flag (default: SSL_VERIFY from config)
-            timeout (int, optional): Request timeout in seconds (default: REQUEST_TIMEOUT from config)
-
-        Returns:
-            requests.Response: HTTP response object
-
-        Raises:
-            Exception: If POST request execution fails
-        """
-        # Merge common headers with custom headers
-        final_headers = COMMON_HEADERS.copy()
-        if headers:
-            final_headers.update(headers)
-
-        # Use config defaults if parameters not provided
-        final_verify = verify if verify is not None else SSL_VERIFY
-        final_timeout = timeout if timeout is not None else REQUEST_TIMEOUT
-
-        try:
-            response = requests.post(
-                url=url,
-                headers=final_headers,
-                params=params,
-                json=json,  # Added for standard POST JSON body support (non-breaking change)
-                verify=final_verify,
-                timeout=final_timeout
-            )
-            return response
-        except Exception as e:
-            raise Exception(f"POST request failed - URL: {url}, Error: {str(e)}")
-
-    @staticmethod
-    def put(url, headers=None, params=None, json=None, verify=None, timeout=None):
-        """
-        Send HTTP PUT request with merged common headers
-
-        Args:
-            url (str): Target API URL
-            headers (dict, optional): Custom headers to override common headers
-            params (dict, optional): URL query parameters
-            json (dict, optional): JSON-formatted request body
-            verify (bool, optional): SSL certificate verification flag (default: SSL_VERIFY from config)
-            timeout (int, optional): Request timeout in seconds (default: REQUEST_TIMEOUT from config)
-
-        Returns:
-            requests.Response: HTTP response object
-
-        Raises:
-            Exception: If PUT request execution fails
-        """
-        # Merge common headers with custom headers
-        final_headers = COMMON_HEADERS.copy()
-        if headers:
-            final_headers.update(headers)
-
-        # Use config defaults if parameters not provided
-        final_verify = verify if verify is not None else SSL_VERIFY
-        final_timeout = timeout if timeout is not None else REQUEST_TIMEOUT
-
-        try:
-            response = requests.put(
-                url=url,
-                headers=final_headers,
-                params=params,
-                json=json,
-                verify=final_verify,
-                timeout=final_timeout
-            )
-            return response
-        except Exception as e:
-            raise Exception(f"PUT request failed - URL: {url}, Error: {str(e)}")
-
-    @staticmethod
-    def login(url=None, login_data=None, retry_times=2):
-        """
-        Send login request to dynamically obtain valid authentication Token
-        Added retry mechanism to handle occasional login failures
-
-        Args:
-            url (str, optional): Login API URL (default: f"{URL}/api/login" from config)
-            login_data (dict, optional): Login credentials (default: TEST_USERNAME/TEST_PASSWORD from config)
-            retry_times (int, optional): Retry times when login fails (default: 2)
-
-        Returns:
-            str: Valid Bearer Token
-
-        Raises:
-            Exception: If login fails after all retries or Token not returned
-        """
-        # Set default values (fallback to config if parameters not provided)
-        login_url = url if url else f"{URL}/api/login"
-        credentials = login_data if login_data else {
-            "email": TEST_USERNAME,
-            "password": TEST_PASSWORD
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+        # 通用请求头（saucedemo 无需复杂头，基础即可）
+        self.headers = {
+            "Content-Type": "application/json;charset=UTF-8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
         }
+        self.session_token = None  # 存储登录后的会话标识
 
-        # Retry logic for robust login
-        for attempt in range(retry_times + 1):
-            try:
-                # Use encapsulated POST method to send login request
-                response = HttpRequest.post(url=login_url, json=credentials)
-                response.raise_for_status()  # Trigger exception for HTTP error status codes (4xx/5xx)
-                res_data = response.json()
+    def login(self, username: str, password: str) -> requests.Response:
+        """封装saucedemo登录接口（接口关联核心）"""
+        login_url = f"{self.base_url}/api/login"
+        payload = {
+            "userName": username,
+            "password": password
+        }
+        response = self.post(url=login_url, json=payload)
+        # 保存登录token（saucedemo登录成功返回的token字段）
+        if response.status_code == 200:
+            self.session_token = response.json().get("token")
+            self.headers["Authorization"] = f"Bearer {self.session_token}"
+        return response
 
-                # Verify Token exists in response
-                if "token" not in res_data:
-                    raise Exception("Login success but no Token returned in response")
+    def get(self, url: str, headers: dict = None) -> requests.Response:
+        """通用GET请求封装"""
+        final_headers = self.headers.copy()
+        if headers:
+            final_headers.update(headers)
+        try:
+            return requests.get(
+                url=url,
+                headers=final_headers,
+                timeout=10,
+                verify=False
+            )
+        except Exception as e:
+            raise Exception(f"GET请求失败 - URL: {url}, 错误: {str(e)}")
 
-                valid_token = res_data["token"]
-                print(f"✅ Login successful (attempt {attempt+1}), obtained valid Token: {valid_token}")
-                return valid_token
+    def post(self, url: str, json: dict = None, headers: dict = None) -> requests.Response:
+        """通用POST请求封装"""
+        final_headers = self.headers.copy()
+        if headers:
+            final_headers.update(headers)
+        try:
+            return requests.post(
+                url=url,
+                headers=final_headers,
+                json=json,
+                timeout=10,
+                verify=False
+            )
+        except Exception as e:
+            raise Exception(f"POST请求失败 - URL: {url}, 错误: {str(e)}")
 
-            except Exception as e:
-                # Raise final exception if all retries failed
-                if attempt == retry_times:
-                    raise Exception(f"❌ Login failed after {retry_times+1} attempts - Error: {str(e)}")
-                # Retry after short delay
-                print(f"⚠️ Login attempt {attempt+1} failed, retrying in 1 second... Error: {str(e)}")
-                time.sleep(1)
-
-http = HttpRequest()
+# 初始化saucedemo请求对象（固定base_url，无需配置文件）
+http = HttpRequest(base_url="https://www.saucedemo.com")
