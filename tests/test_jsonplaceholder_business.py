@@ -1,53 +1,52 @@
 # -*- coding: utf-8 -*-
 """
-ReqRes 鉴权关联专用用例
-核心：登录获取Token → 携带Token访问用户接口（鉴权关联核心场景）
-适配：本地真实Token / CI Mock Token（规避风控）
+JSONPlaceholder 业务参数关联专用用例
+核心：创建资源→提取ID→用ID查询关联资源（业务参数关联核心场景）
+特点：100%无风控，CI稳定运行
 """
-import pytest
 from common.request import http
-from config.config import REQRES_TEST_USER
 
-# -------------------------- 固件：获取ReqRes Token（鉴权关联核心） --------------------------
-@pytest.fixture(scope="module")
-def reqres_auth_token():
-    """
-    固件：统一获取ReqRes Token（本地真实/CI Mock）
-    作用域：module（整个文件复用一次，提升效率）
-    """
-    # 调用封装好的登录方法，自动处理真实/Mock Token
-    token = http.reqres_login(
-        email=REQRES_TEST_USER["email"],
-        password=REQRES_TEST_USER["password"]
-    )
-    yield token
-    # 固件销毁：清空Token（可选，仅做示例）
-    http.token = None
-    print("\n✅ ReqRes Token固件销毁完成")
-
-# -------------------------- 鉴权关联核心用例 --------------------------
-def test_get_user_with_token(reqres_auth_token):
-    """正向用例：携带Token访问用户接口（鉴权关联验证）"""
-    # 切换到ReqRes场景
-    http.switch_to_reqres()
-    # 构造鉴权请求头（Bearer Token规范）
-    auth_headers = {"Authorization": f"Bearer {reqres_auth_token}"}
-    # 访问需要鉴权的用户接口（相对路径，自动拼接base_url）
-    resp = http.get("/api/users/2", headers=auth_headers)
+# -------------------------- 业务参数关联核心用例 --------------------------
+def test_create_post_then_get_comments():
+    """正向用例：创建文章→提取postId→查询该文章的评论（业务参数关联）"""
+    # 切换到JSONPlaceholder场景
+    http.switch_to_jsonplaceholder()
     
-    # 核心断言（鉴权关联成功）
-    assert resp.status_code == 200, f"预期状态码200，实际{resp.status_code}"
-    assert resp.json()["data"]["id"] == 2, "用户ID不匹配"
-    assert resp.json()["data"]["email"] is not None, "用户邮箱为空"
-    print("✅ 鉴权关联用例通过：Token携带成功，正常获取用户数据")
-
-def test_get_user_without_token():
-    """负向用例：无Token访问用户接口（验证鉴权机制）"""
-    http.switch_to_reqres()
-    # 不携带Token访问接口
-    resp = http.get("/api/users/2")
+    # 步骤1：创建文章，提取业务参数（postId）
+    create_payload = {
+        "title": "CI_TEST_业务关联",
+        "body": "接口自动化-业务参数关联测试",
+        "userId": 1
+    }
+    create_resp = http.post("/posts", json=create_payload)
+    # 断言创建成功
+    assert create_resp.status_code == 201, f"创建文章失败，状态码{create_resp.status_code}"
+    post_id = create_resp.json()["id"]  # 提取核心业务参数
+    assert post_id is not None, "创建文章未返回postId"
+    print(f"✅ 创建文章成功，提取postId：{post_id}")
     
-    # 断言：无Token也能访问（ReqRes的GET接口实际无严格鉴权，仅做示例）
-    # 真实项目中此处应断言401，这里适配ReqRes的实际情况
-    assert resp.status_code == 200, "无Token访问失败（不符合ReqRes实际逻辑）"
-    print("✅ 负向用例通过：ReqRes GET接口无Token也可访问（符合平台特性）")
+    # 步骤2：用postId查询关联评论（业务参数传递）
+    get_resp = http.get(f"/comments?postId={post_id}")
+    # 断言关联查询成功
+    assert get_resp.status_code == 200, f"查询评论失败，状态码{get_resp.status_code}"
+    assert len(get_resp.json()) > 0, "无对应postId的评论（业务关联失败）"
+    # 验证所有评论的postId都匹配（精准关联验证）
+    for comment in get_resp.json():
+        assert comment["postId"] == post_id, f"评论postId不匹配：{comment['postId']} != {post_id}"
+    print("✅ 业务参数关联用例通过：postId传递成功，查询到对应评论")
+
+def test_get_post_then_get_user():
+    """拓展用例：查询文章→提取userId→查询关联用户（多层业务关联）"""
+    http.switch_to_jsonplaceholder()
+    
+    # 步骤1：查询文章，提取userId
+    post_resp = http.get("/posts/1")
+    assert post_resp.status_code == 200, "查询文章失败"
+    user_id = post_resp.json()["userId"]
+    assert user_id == 1, "文章userId不符合预期"
+    
+    # 步骤2：用userId查询关联用户
+    user_resp = http.get(f"/users/{user_id}")
+    assert user_resp.status_code == 200, "查询用户失败"
+    assert user_resp.json()["id"] == user_id, "用户ID不匹配"
+    print("✅ 多层业务关联用例通过：userId传递成功，查询到对应用户")
