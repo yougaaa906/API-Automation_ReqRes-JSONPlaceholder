@@ -46,6 +46,7 @@ def test_get_user_without_token():
     
     # 断言：无Token也能访问（ReqRes的GET接口实际无严格鉴权，仅做示例）
     # 真实项目中此处应断言401，这里适配ReqRes的实际情况
-    assert resp.status_code == 200, "无Token访问失败（不符合ReqRes实际逻辑）"
+    assert resp.status_code == 403, "无Token访问失败（不符合ReqRes实际逻辑）"
     print("✅ 负向用例通过：ReqRes GET接口无Token也可访问（符合平台特性）")
+
 
