@@ -11,6 +11,11 @@ on:
 jobs:
   api-test:
     runs-on: ubuntu-latest
+   
+    permissions:
+      contents: write       
+      pages: write         
+      id-token: write       
     env:
       TEST_ENV: "test"
       REQRES_MOCK_TOKEN: "mock_token_ci_123456"
