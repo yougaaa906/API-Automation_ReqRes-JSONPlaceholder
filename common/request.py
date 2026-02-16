@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
 import requests
 # 导入config配置
-from config.config import API_BASE_URL, REQUEST_TIMEOUT, SSL_VERIFY
+from config.config import (
+    REQRES_BASE_URL,
+    JSONPLACEHOLDER_BASE_URL,
+    REQUEST_TIMEOUT,
+    SSL_VERIFY,
+    COMMON_HEADERS,
+    REQRES_MOCK_TOKEN
+)
 
 requests.packages.urllib3.disable_warnings()
 
@@ -63,3 +70,4 @@ class HttpRequest:
 
 # 初始化请求对象（无需传参，自动读取config）
 http = HttpRequest()
+
