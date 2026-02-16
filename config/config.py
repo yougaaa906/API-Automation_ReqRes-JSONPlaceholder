@@ -1,40 +1,29 @@
+# -*- coding: utf-8 -*-
 """
-Configuration file for API automation test (Reqres.in)
-Contains environment constants and common request headers
-Adapted for GitHub Actions execution environment
+配置文件：统一管理环境变量、接口地址、通用配置（贴近真实工作规范）
 """
 import os
 
-# -------------------------- API Base Configuration --------------------------
-# API base URL - Priority: GitHub Actions env > hardcoded default
-API_BASE_URL = os.getenv("API_BASE_URL", "https://reqres.in")
-# Alias for API_BASE_URL (compatible with login method in request.py)
-URL = API_BASE_URL
+# -------------------------- 环境配置 --------------------------
+# 环境选择：优先从CI环境变量读取，本地默认test
+ENV = os.getenv("TEST_ENV", "test")
 
-# Authentication credentials - Priority: GitHub Actions secrets > hardcoded default
-# Note: In production, always use GitHub Secrets instead of hardcoding
-USERNAME = os.getenv("API_TEST_USERNAME", "yougaaa@163.com")
-PASSWORD = os.getenv("API_TEST_PASSWORD", "zhangruijie906")
-
-# Alias for login credentials (compatible with reqres.in official test account)
-# Priority: Custom account > reqres.in official test account
-TEST_USERNAME = os.getenv("API_TEST_USERNAME", "eve.holt@reqres.in")
-TEST_PASSWORD = os.getenv("API_TEST_PASSWORD", "cityslicka")
-
-# Fixed authentication token for API requests (deprecated, use dynamic login instead)
-FIXED_TOKEN = os.getenv("API_FIXED_TOKEN", "QpwL5tke4Pnpja7X4")
-
-# -------------------------- Common Request Headers --------------------------
-# Standard HTTP headers for all API requests
-# Can be overridden by custom headers in specific requests
-COMMON_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Content-Type": "application/json;charset=UTF-8"
+# -------------------------- 接口基础配置 --------------------------
+# 多环境base_url（saucedemo只有test环境，仅做示例）
+BASE_URLS = {
+    "test": "https://www.saucedemo.com",
+    "prod": "https://www.saucedemo.com"  # 示例：实际工作中会区分
 }
+# 最终使用的base_url
+API_BASE_URL = BASE_URLS[ENV]
 
-# -------------------------- Request Configuration --------------------------
-# Default request timeout (seconds) - configurable via GitHub Actions env
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
+# -------------------------- 请求配置 --------------------------
+# 请求超时时间（秒）
+REQUEST_TIMEOUT = 10
+# SSL验证（固定False，适配saucedemo）
+SSL_VERIFY = False
 
-# SSL verification flag - disable for testing environments
-SSL_VERIFY = os.getenv("SSL_VERIFY", "False").lower() == "true"
+# -------------------------- 测试账号配置 --------------------------
+# saucedemo官方测试账号（CI中可从Secrets读取，本地用默认值）
+TEST_USERNAME = os.getenv("SAUCEDEMO_USERNAME", "standard_user")
+TEST_PASSWORD = os.getenv("SAUCEDEMO_PASSWORD", "secret_sauce")
