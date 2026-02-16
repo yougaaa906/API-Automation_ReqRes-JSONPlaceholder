@@ -16,10 +16,7 @@ def reqres_auth_token():
     作用域：module（整个文件复用一次，提升效率）
     """
     # 调用封装好的登录方法，自动处理真实/Mock Token
-    token = http.reqres_login(
-        email=REQRES_TEST_USER["email"],
-        password=REQRES_TEST_USER["password"]
-    )
+    token = http.reqres_login()
     yield token
     # 固件销毁：清空Token（可选，仅做示例）
     http.token = None
@@ -51,3 +48,4 @@ def test_get_user_without_token():
     # 真实项目中此处应断言401，这里适配ReqRes的实际情况
     assert resp.status_code == 200, "无Token访问失败（不符合ReqRes实际逻辑）"
     print("✅ 负向用例通过：ReqRes GET接口无Token也可访问（符合平台特性）")
+
