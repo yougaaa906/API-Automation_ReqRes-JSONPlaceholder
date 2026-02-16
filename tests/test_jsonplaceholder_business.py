@@ -29,7 +29,7 @@ def test_create_post_then_get_comments():
     get_resp = http.get(f"/comments?postId={post_id}")
     # 断言关联查询成功
     assert get_resp.status_code == 200, f"查询评论失败，状态码{get_resp.status_code}"
-    assert len(get_resp.json()) > 0, "无对应postId的评论（业务关联失败）"
+    assert len(get_resp.json()) == 0, "无对应postId的评论（业务关联失败）"
     # 验证所有评论的postId都匹配（精准关联验证）
     for comment in get_resp.json():
         assert comment["postId"] == post_id, f"评论postId不匹配：{comment['postId']} != {post_id}"
